@@ -1,0 +1,310 @@
+// Mi Sistema de Vida — Prisma Schema
+// Stack: SQLite (single-file DB, zero server config)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+
+  visions            Vision[]
+  lifebookCategories LifebookCategory[]
+  cycles             TwelveWeekCycle[]
+  habits             Habit[]
+  monthlyReviews     MonthlyReview[]
+  studyTopics        StudyTopic[]
+  dailyTasks         DailyTask[]
+  settings           AppSettings?
+}
+
+// ─────────────────────────────────────────
+// 1. VISIÓN 3 Y 5 AÑOS (The 12 Week Year)
+// ─────────────────────────────────────────
+
+model Vision {
+  id                 String   @id @default(cuid())
+  userId             String
+  type               String   // "THREE_YEAR" | "FIVE_YEAR"
+  whereIWantToBe     String   @default("")
+  whoIWantToBe       String   @default("")
+  whatIWantToAchieve String   @default("")
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+}
+
+// ─────────────────────────────────────────
+// 2. LIFEBOOK (12 categorías de vida)
+// ─────────────────────────────────────────
+
+model LifebookCategory {
+  id                String   @id @default(cuid())
+  userId            String
+  slug              String
+  // HEALTH | INTELLECTUAL | EMOTIONAL | CHARACTER | SPIRITUAL |
+  // PARTNERSHIP | PARENTING | SOCIAL | FINANCIAL | CAREER |
+  // QUALITY_OF_LIFE | LIFE_VISION
+  currentBeliefs    String   @default("")
+  idealVision       String   @default("")
+  whyIWantIt        String   @default("")
+  howIWillAchieveIt String   @default("")
+  linkedVision3     Boolean  @default(false)
+  linkedVision5     Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectives     Objective[]
+  monthlyReviews MonthlyReview[]
+
+  @@unique([userId, slug])
+}
+
+// ─────────────────────────────────────────
+// 3. CICLOS DE 12 SEMANAS (The 12 Week Year)
+// ─────────────────────────────────────────
+
+model TwelveWeekCycle {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  totalWeeks     Int      @default(12)
+  status         String   @default("ACTIVE") // "ACTIVE" | "CLOSED"
+  closureSummary String?
+  createdAt      DateTime @default(now())
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectives    Objective[]
+  weeklyReviews WeeklyReview[]
+  habits        Habit[]
+  closure       CycleClosure?
+}
+
+model Objective {
+  id                 String   @id @default(cuid())
+  cycleId            String
+  lifebookCategoryId String?
+  name               String
+  lagMeasure         String   @default("")
+  leadMeasure        String   @default("")
+  linkedVision3      Boolean  @default(false)
+  linkedVision5      Boolean  @default(false)
+  order              Int      @default(0)
+  createdAt          DateTime @default(now())
+
+  cycle            TwelveWeekCycle   @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  lifebookCategory LifebookCategory? @relation(fields: [lifebookCategoryId], references: [id])
+  weeklyTactics    WeeklyTactic[]
+}
+
+model WeeklyTactic {
+  id          String  @id @default(cuid())
+  objectiveId String
+  weekNumber  Int
+  description String  @default("")
+  completed   Boolean @default(false)
+
+  objective Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+}
+
+model WeeklyReview {
+  id            String   @id @default(cuid())
+  cycleId       String
+  weekNumber    Int
+  whatWorked    String   @default("")
+  whatDidntWork String   @default("")
+  whatIAdjust   String   @default("")
+  whoIReport    String   @default("")
+  executionScore Float   @default(0)
+  createdAt     DateTime @default(now())
+
+  cycle TwelveWeekCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, weekNumber])
+}
+
+// ─────────────────────────────────────────
+// 4. HÁBITOS (Hábitos Atómicos)
+// ─────────────────────────────────────────
+
+model Habit {
+  id               String   @id @default(cuid())
+  userId           String
+  cycleId          String?
+  name             String
+  scheduledTime    String   @default("")
+  location         String   @default("")
+  stackedAfter     String?
+  makeItObvious    String   @default("")
+  makeItAttractive String   @default("")
+  makeItEasy       String   @default("")
+  makeItSatisfying String   @default("")
+  startWeek        Int      @default(1)
+  status           String   @default("ACTIVE") // "ACTIVE" | "PAUSED" | "ABANDONED"
+  createdAt        DateTime @default(now())
+
+  user  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cycle TwelveWeekCycle?  @relation(fields: [cycleId], references: [id])
+  logs  HabitLog[]
+}
+
+model HabitLog {
+  id        String  @id @default(cuid())
+  habitId   String
+  date      String  // "YYYY-MM-DD" — easier SQLite date querying
+  completed Boolean @default(false)
+  note      String?
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+}
+
+// ─────────────────────────────────────────
+// 5. REVISIONES Y CIERRE DE CICLO
+// ─────────────────────────────────────────
+
+model MonthlyReview {
+  id                 String   @id @default(cuid())
+  userId             String
+  month              Int
+  year               Int
+  lifebookCategoryId String
+  notes              String   @default("")
+  createdAt          DateTime @default(now())
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lifebookCategory LifebookCategory @relation(fields: [lifebookCategoryId], references: [id])
+}
+
+model CycleClosure {
+  id                  String   @id @default(cuid())
+  cycleId             String   @unique
+  achievedResults     String   @default("")
+  learnings           String   @default("")
+  executionPercent    Float    @default(0)
+  objectivesToRepeat  String   @default("[]") // JSON-encoded array of objective IDs
+  objectivesToDiscard String   @default("[]")
+  autoSummary         String   @default("")
+  createdAt           DateTime @default(now())
+
+  cycle TwelveWeekCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────
+// 6. SISTEMA DE ESTUDIO ACELERADO
+// ─────────────────────────────────────────
+
+model StudyTopic {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fronts StudyFront[]
+}
+
+model StudyFront {
+  id          String   @id @default(cuid())
+  topicId     String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  topic StudyTopic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  notes StudyNote[]
+}
+
+model StudyNote {
+  id                String   @id @default(cuid())
+  frontId           String
+  content           String
+  mentalImage       String?
+  flashcard         String?
+  mentalImageEdited Boolean  @default(false)
+  aiPromptUsed      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  front            StudyFront             @relation(fields: [frontId], references: [id], onDelete: Cascade)
+  spacedRepetition SpacedRepetitionEntry?
+}
+
+model SpacedRepetitionEntry {
+  id             String    @id @default(cuid())
+  noteId         String    @unique
+  interval       Int       @default(1)
+  easeFactor     Float     @default(2.5)
+  repetitions    Int       @default(0)
+  nextReviewDate DateTime
+  lastReviewDate DateTime?
+
+  note StudyNote       @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  logs RepetitionLog[]
+}
+
+model RepetitionLog {
+  id          String   @id @default(cuid())
+  entryId     String
+  reviewDate  DateTime @default(now())
+  quality     Int      // 0-5 (SM-2 quality rating)
+  newInterval Int
+
+  entry SpacedRepetitionEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────
+// CONFIGURACIÓN
+// ─────────────────────────────────────────
+
+model AppSettings {
+  id                   String  @id @default(cuid())
+  userId               String  @unique
+  dailyChecklistTime   String  @default("08:00")
+  weeklyReviewDay      Int     @default(0) // 0=Sun..6=Sat
+  weeklyReviewTime     String  @default("18:00")
+  notificationsEnabled Boolean @default(true)
+  openaiApiKey         String?
+  aiPromptTemplate     String  @default("Genera una imagen mental memorable (escena visual concreta y vívida, máximo 3 líneas) y una pregunta de repaso tipo flashcard para esta nota. No inventes datos que no estén en el texto. Responde en el mismo idioma de la nota. Formato exacto de respuesta:\nIMAGEN_MENTAL: [descripción]\nFLASHCARD: [pregunta]")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────
+// AGENDA DEL DÍA (Hoy y Mañana)
+// ─────────────────────────────────────────
+
+model DailyTask {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  date       String   // "YYYY-MM-DD"
+  completed  Boolean  @default(false)
+  sourceType String?  // "CUSTOM" | "TACTIC" | "HABIT"
+  sourceId   String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
