@@ -7,11 +7,15 @@ import Link from 'next/link'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('eduarps9513@gmail.com')
+  const [password, setPassword] = useState('12345678')
   const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const [loading, setLoading] = useState(false)
   const [hasUser, setHasUser] = useState<boolean | null>(null)
+  const [showResetModal, setShowResetModal] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
     fetch('/api/setup')
@@ -23,6 +27,7 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setSuccessMsg('')
     const result = await signIn('credentials', {
       email: email.trim().toLowerCase(),
       password: password.trim(),
@@ -33,7 +38,30 @@ export default function LoginPage() {
       router.push('/')
       router.refresh()
     } else {
-      setError('Email o contraseña incorrectos')
+      setError('Email o contraseña incorrectos. Si olvidaste tu contraseña, usa el botón de abajo para restablecerla.')
+    }
+  }
+
+  async function handleResetPassword() {
+    if (!newPassword.trim()) return
+    setResetting(true)
+    setError('')
+    const res = await fetch('/api/auth/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        password: newPassword.trim(),
+      }),
+    })
+    setResetting(false)
+    if (res.ok) {
+      setPassword(newPassword.trim())
+      setShowResetModal(false)
+      setSuccessMsg('✓ ¡Contraseña actualizada! Ahora puedes Iniciar Sesión con tu nueva contraseña.')
+      setNewPassword('')
+    } else {
+      setError('Error al cambiar contraseña')
     }
   }
 
@@ -63,6 +91,13 @@ export default function LoginPage() {
             </div>
           )}
 
+          {successMsg && (
+            <div className="alert-success mb-5">
+              <span>✓</span>
+              <span>{successMsg}</span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="label">Email</label>
@@ -78,7 +113,16 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="label">Contraseña</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="label mb-0">Contraseña</label>
+                <button
+                  type="button"
+                  onClick={() => setShowResetModal(true)}
+                  className="text-xs text-violet-400 hover:text-violet-300 underline"
+                >
+                  Restablecer
+                </button>
+              </div>
               <input
                 id="password"
                 type="password"
@@ -118,14 +162,55 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-slate-500 text-xs mt-6">
-            ¿No tienes cuenta?{' '}
-            <Link href="/setup" className="text-violet-400 hover:text-violet-300">
-              Configurar sistema
-            </Link>
-          </p>
+          <div className="mt-6 pt-4 border-t border-white/10 text-center">
+            <button
+              onClick={() => setShowResetModal(true)}
+              className="btn-secondary text-xs w-full py-2.5"
+            >
+              🔑 ¿Olvidaste o quieres cambiar tu contraseña?
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Reset Modal */}
+      {showResetModal && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowResetModal(false)}>
+          <div className="modal-content max-w-sm">
+            <div className="p-6 border-b border-white/[0.06]">
+              <h3 className="text-base font-bold text-white">🔑 Restablecer Contraseña</h3>
+              <p className="text-xs text-slate-400 mt-1">Escribe tu nueva contraseña para cambiarla de inmediato.</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="label">Correo</label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" />
+              </div>
+              <div>
+                <label className="label">Nueva Contraseña</label>
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="ej. 12345678"
+                  className="input"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowResetModal(false)} className="btn-secondary flex-1">Cancelar</button>
+                <button
+                  onClick={handleResetPassword}
+                  disabled={resetting || !newPassword.trim()}
+                  className="btn-primary flex-1"
+                >
+                  {resetting ? 'Guardando...' : 'Restablecer ✓'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
